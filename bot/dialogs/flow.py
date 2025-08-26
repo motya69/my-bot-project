@@ -10,7 +10,7 @@
 #   - next:     следующий узел (линейный переход)
 #   - next_by_button: переходы по кнопкам (словарь "текст кнопки" -> "узел")
 
-from .questions import TEXT, BUTTONS  # импортируем тексты и кнопки (данные)
+from bot.dialogs.common.questions import TEXT, BUTTONS  # импортируем тексты и кнопки (данные)
 
 FLOW = {
     # --- Стартовый узел ---

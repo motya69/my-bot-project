@@ -1,10 +1,10 @@
-# Этот файл делает папку validators полноценным Python-пакетом.
-# Здесь мы укажем, какие функции можно импортировать "снаружи".
+# Реэкспорт "витрины" валидаторов для удобных импортов.
+from .base import is_nonempty, is_year, is_number
+from .tires import is_tire_size
+from .wheels import is_pcd
 
-from .validators import is_nonempty, is_year, is_tire_size
-
-# Если кто-то напишет:
-#   from bot.validators import is_tire_size
-# то функция подтянется из validators.py без лишних путей.
-
-__all__ = ["is_nonempty", "is_year", "is_tire_size"]
+__all__ = [
+    "is_nonempty", "is_year", "is_number",
+    "is_tire_size",
+    "is_pcd",
+]
