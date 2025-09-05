@@ -16,3 +16,7 @@ def is_tire_size(text: str) -> bool:
     # 205/55 R16
     pattern = r"^\d{3}/\d{2}\sR\d{2}$"
     return re.match(pattern, s) is not None
+
+def is_vin(s: str) -> bool:
+    s = (s or "").strip().upper()
+    return bool(re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", s))

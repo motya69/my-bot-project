@@ -5,22 +5,39 @@
 # ТЕКСТЫ СООБЩЕНИЙ
 # --------------------------
 # Общие кнопки/тексты, которые используют обе ветки
+# bot/dialogs/common/questions.py
 TEXT = {
-    "choose_entity": "Что подбираем?",
+    "greet": "Привет! Чем помочь сегодня? 🙌\nВыберите, что подбирать:",
+    "ask_size": "Введи размер шин (например: 205/55 R16).",
     "ask_car_make": "Выбери марку автомобиля:",
+    "ask_car_make_free": "Напиши марку автомобиля:",
     "ask_car_model_toyota": "Выбери модель Toyota:",
     "ask_car_model_vw": "Выбери модель Volkswagen:",
     "ask_car_model_bmw": "Выбери модель BMW:",
-    "ask_car_make_free": "Напиши марку автомобиля:",
     "ask_car_model_free": "Напиши модель автомобиля:",
-    "ask_car_year": "Какой год выпуска авто?",
-    "end": "Готово! Если хочешь начать заново — /start",
+    "ask_car_year": "Укажи год выпуска (например, 2018):",
+    "resolving_oem": "Проверяю штатные размеры…",
+    "ask_season": "Какой сезон нужен?",
+    "ask_budget": "Какой бюджет рассматриваешь?",
+    "ask_brand": "Есть предпочтения по бренду?",
+    "searching": "Ищу варианты…",
+    "found_offers": "Нашла подходящие варианты 👇",
+    "end": "Готово! Если нужен новый подбор — набери /start.",
 }
 
 BUTTONS = {
+    "start": [
+        "Знаю размер",
+        "🧠 Умный подбор (по шагам)",
+        "Подобрать по авто",
+        "🔑 По VIN",
+    ],
     "entity": ["Шины", "Диски"],
+    "season": ["Лето", "Зима", "Всесезон"],
+    "budget": ["Эконом", "Средний", "Премиум"],
+    "brands": ["Без разницы", "Nokian", "Michelin", "Cordiant", "Pirelli"],
     "car_makes": ["Toyota", "Volkswagen", "BMW", "Другая"],
     "toyota_models": ["Camry", "Corolla", "RAV4", "Другая"],
-    "vw_models": ["Golf", "Passat", "Tiguan", "Другая"],
+    "vw_models": ["Polo", "Tiguan", "Golf", "Другая"],
     "bmw_models": ["3 Series", "5 Series", "X3", "Другая"],
 }

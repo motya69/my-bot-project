@@ -2,17 +2,22 @@ from ..common import TEXT as C_TEXT, BUTTONS as C_BTN
 from .questions import TEXT_T, BUTTONS_T
 
 FLOW = {
-    # t_entry — вход в ветку шин
     "t_entry": {
         "text": TEXT_T["entry"],
-        "buttons": BUTTONS_T["entry"],
+        "buttons": [
+            "Знаю размер",
+            "🧠 Умный подбор (по шагам)",
+            "Подобрать по авто",
+            "🔑 По VIN",
+        ],
         "next_by_button": {
             "Знаю размер": "t_ask_size",
+            "🧠 Умный подбор (по шагам)": "t_smart_width",
             "Подобрать по авто": "t_ask_car_make",
+            "🔑 По VIN": "t_vin",
         },
     },
 
-    # знаю размер
     "t_ask_size": {
         "text": TEXT_T["ask_size"],
         "expect": "text",
@@ -21,60 +26,8 @@ FLOW = {
         "next": "t_ask_season",
     },
 
-    # подбор по авто: марка/модель/год → action найдет размер
-    "t_ask_car_make": {
-        "text": C_TEXT["ask_car_make"],
-        "buttons": C_BTN["car_makes"],
-        "next_by_button": {
-            "Toyota": "t_ask_car_model_Toyota",
-            "Volkswagen": "t_ask_car_model_VW",
-            "BMW": "t_ask_car_model_BMW",
-            "Другая": "t_ask_car_make_free",
-        },
-    },
-    "t_ask_car_make_free": {
-        "text": C_TEXT["ask_car_make_free"],
-        "expect": "text",
-        "var_name": "car_make",
-        "validator": "is_nonempty",
-        "next": "t_ask_car_model_free",
-    },
-    "t_ask_car_model_Toyota": {
-        "text": C_TEXT["ask_car_model_toyota"],
-        "buttons": C_BTN["toyota_models"],
-        "next_by_button": {m: "t_ask_car_year" for m in C_BTN["toyota_models"]},
-    },
-    "t_ask_car_model_VW": {
-        "text": C_TEXT["ask_car_model_vw"],
-        "buttons": C_BTN["vw_models"],
-        "next_by_button": {m: "t_ask_car_year" for m in C_BTN["vw_models"]},
-    },
-    "t_ask_car_model_BMW": {
-        "text": C_TEXT["ask_car_model_bmw"],
-        "buttons": C_BTN["bmw_models"],
-        "next_by_button": {m: "t_ask_car_year" for m in C_BTN["bmw_models"]},
-    },
-    "t_ask_car_model_free": {
-        "text": C_TEXT["ask_car_model_free"],
-        "expect": "text",
-        "var_name": "car_model",
-        "validator": "is_nonempty",
-        "next": "t_ask_car_year",
-    },
-    "t_ask_car_year": {
-        "text": C_TEXT["ask_car_year"],
-        "expect": "text",
-        "var_name": "car_year",
-        "validator": "is_year",
-        "next": "t_resolve_oem_size",
-    },
-    "t_resolve_oem_size": {
-        "text": TEXT_T["resolving_oem"],
-        "action": "find_oem_size",
-        "next": "t_ask_season",
-    },
+    # ... (узлы подбора по авто t_ask_car_* ... t_resolve_oem_size) ...
 
-    # общая развилка по шинам
     "t_ask_season": {
         "text": TEXT_T["ask_season"],
         "buttons": BUTTONS_T["season"],
@@ -102,10 +55,40 @@ FLOW = {
     },
     "t_budget_compare": {
         "text": TEXT_T["budget_compare"],
-        # явная кнопка для возврата
         "buttons": ["⬅️ Вернуться к выбору бюджета"],
         "next_by_button": {
             "⬅️ Вернуться к выбору бюджета": "t_ask_budget"
         },
-    }
+    },  # ← ВАЖНО: ЗАКРЫЛИ t_budget_compare и поставили запятую!
+
+    # ---------- УМНЫЙ ПОДБОР (ОТДЕЛЬНЫЕ ВЕРХНЕУРОВНЕВЫЕ УЗЛЫ) ----------
+    "t_smart_width": {
+        "text": "Выбери ширину шины:",
+        "buttons": [],           # заполним динамически в main
+        "next_by_button": {},    # обработаем вручную в main
+    },
+    "t_smart_height": {
+        "text": "Выбери профиль (высоту, %):",
+        "buttons": [],
+        "next_by_button": {},
+    },
+    "t_smart_diameter": {
+        "text": "Выбери диаметр (дюймы):",
+        "buttons": [],
+        "next_by_button": {},
+    },
+
+    # ---------- VIN ----------
+    "t_vin": {
+        "text": "Введи VIN (17 символов, латиница/цифры, без I,O,Q):",
+        "expect": "text",
+        "validator": "is_vin",
+        "var_name": "vin",
+        "next": "t_vin_sizes",
+    },
+    "t_vin_sizes": {
+        "text": "По VIN доступны такие размеры. Выбери один:",
+        "buttons": ["205/55 R16", "215/60 R16", "225/45 R17"],
+        "next_by_button": {s: "t_ask_season" for s in ["205/55 R16", "215/60 R16", "225/45 R17"]},
+    },
 }

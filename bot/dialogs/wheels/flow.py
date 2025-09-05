@@ -1,7 +1,10 @@
-from ..common import TEXT as C_TEXT, BUTTONS as C_BTN
+# bot/dialogs/wheels/flow.py
+from ..common.questions import TEXT as C_TEXT, BUTTONS as C_BTN
 from .questions import TEXT_W, BUTTONS_W
-
+print("[DEBUG wheels.questions TEXT_W keys]:", list(TEXT_W.keys()), flush=True)
+print("[DEBUG wheels.questions BUTTONS_W keys]:", list(BUTTONS_W.keys()), flush=True)
 FLOW = {
+    # Вход в ветку дисков
     "w_entry": {
         "text": TEXT_W["entry"],
         "buttons": BUTTONS_W["entry"],
@@ -11,14 +14,44 @@ FLOW = {
         },
     },
 
-    # знаю параметры → спрашиваем по очереди
-    "w_ask_r":   {"text": TEXT_W["ask_r"],   "expect": "text", "var_name": "wheel_r",   "validator": "is_number", "next": "w_ask_j"},
-    "w_ask_j":   {"text": TEXT_W["ask_j"],   "expect": "text", "var_name": "wheel_j",   "validator": "is_number", "next": "w_ask_pcd"},
-    "w_ask_pcd": {"text": TEXT_W["ask_pcd"], "expect": "text", "var_name": "wheel_pcd", "validator": "is_pcd",    "next": "w_ask_et"},
-    "w_ask_et":  {"text": TEXT_W["ask_et"],  "expect": "text", "var_name": "wheel_et",  "validator": "is_number", "next": "w_ask_dia"},
-    "w_ask_dia": {"text": TEXT_W["ask_dia"], "expect": "text", "var_name": "wheel_dia", "validator": "is_number", "next": "w_ask_budget"},
+    # Знаю параметры → по очереди спрашиваем поля
+    "w_ask_r": {
+        "text": TEXT_W["ask_r"],
+        "expect": "text",
+        "var_name": "wheel_r",
+        "validator": "is_number",
+        "next": "w_ask_j",
+    },
+    "w_ask_j": {
+        "text": TEXT_W["ask_j"],
+        "expect": "text",
+        "var_name": "wheel_j",
+        "validator": "is_number",
+        "next": "w_ask_pcd",
+    },
+    "w_ask_pcd": {
+        "text": TEXT_W["ask_pcd"],
+        "expect": "text",
+        "var_name": "wheel_pcd",
+        "validator": "is_pcd",
+        "next": "w_ask_et",
+    },
+    "w_ask_et": {
+        "text": TEXT_W["ask_et"],
+        "expect": "text",
+        "var_name": "wheel_et",
+        "validator": "is_number",
+        "next": "w_ask_dia",
+    },
+    "w_ask_dia": {
+        "text": TEXT_W["ask_dia"],
+        "expect": "text",
+        "var_name": "wheel_dia",
+        "validator": "is_number",
+        "next": "w_ask_budget",
+    },
 
-    # подбор по авто для дисков
+    # Подбор по авто (используем общие списки марок/моделей)
     "w_ask_car_make": {
         "text": C_TEXT["ask_car_make"],
         "buttons": C_BTN["car_makes"],
@@ -71,7 +104,7 @@ FLOW = {
         "next": "w_ask_budget",
     },
 
-    # общая развилка по дискам
+    # Бюджет и бренды → поиск/вывод
     "w_ask_budget": {
         "text": TEXT_W["ask_budget"],
         "buttons": BUTTONS_W["budget"],
@@ -90,6 +123,6 @@ FLOW = {
     "w_show_offers": {
         "text": TEXT_W["found_offers"],
         "action": "render_wheels_offers",
-        "next": "end",
-    }
+        "next": "end",   # общий финал из базового FLOW
+    },
 }
