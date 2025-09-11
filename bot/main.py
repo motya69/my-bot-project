@@ -9,7 +9,9 @@ from bot.data.tire_sizes import smart_widths, smart_heights, smart_diameters
 from bot.dialogs import FLOW
 from bot.dialogs.tires.questions import TEXT_T  # для текста сравнения сегментов
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from telebot.types import ReplyKeyboardRemove
+from bot.data.wheel_smart import (
+    smart_wheel_r, smart_wheel_j, smart_wheel_pcd, smart_wheel_et, smart_wheel_dia
+)
 # ⭐ Валидаторы/экшены
 from bot.validators import (
     is_nonempty, is_year, is_number, is_tire_size, is_pcd, is_vin  # FIX: добавили is_vin
@@ -18,6 +20,7 @@ from bot.actions import (
     find_oem_size, search_tires, render_tire_offers,
     find_oem_wheels, search_wheels, render_wheels_offers,
 )
+from bot.actions.vin import tires_sizes_from_vin, wheels_params_from_vin
 
 # ===== Кнопки управления и текст помощи =====
 BACK_BTN = "⬅️ Назад"
@@ -100,21 +103,22 @@ def _cb_back() -> str:
 def build_inline_kb(node_key: str, buttons: list[str] | None, show_back: bool) -> InlineKeyboardMarkup | None:
     if not buttons and not show_back:
         return None
-    # 👇 для ширины шин — сетка 4xN
-    if node_key == "t_smart_width":
+        # 👉 для умных подборов (шины + диски) — сетка 4 в ряд
+    if node_key in SMART_NODES:
         kb = InlineKeyboardMarkup(row_width=4)
         row = []
         for i, b in enumerate(buttons or []):
             row.append(InlineKeyboardButton(text=b, callback_data=_cb_btn(node_key, i)))
-            if len(row) == 4:   # как только набралось 4 → новая строка
+            if len(row) == 4:
                 kb.row(*row)
                 row = []
-        if row:   # остаток (меньше 4)
+        if row:  # остаток < 4
             kb.row(*row)
         if show_back:
             kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data=_cb_back()))
         return kb
 
+    # 👉 дефолтные кнопки — по 3 в ряд
     kb = InlineKeyboardMarkup(row_width=3)
     for i, b in enumerate(buttons or []):
         kb.add(InlineKeyboardButton(text=b, callback_data=_cb_btn(node_key, i)))
@@ -136,7 +140,10 @@ def send_node(chat_id: int, node_key: str) -> None:
     show_back = (node_key != "start")
     kb = build_inline_kb(node_key, buttons, show_back)
     bot.send_message(chat_id, text, reply_markup=kb)
-SMART_NODES = {"t_smart_width", "t_smart_height", "t_smart_diameter"}
+VIN_SMART = {"t_vin_sizes", "w_vin_params"}
+TIRES_SMART  = {"t_smart_width", "t_smart_height", "t_smart_diameter"}
+WHEELS_SMART = {"w_smart_r", "w_smart_j", "w_smart_pcd", "w_smart_et", "w_smart_dia"}
+SMART_NODES = TIRES_SMART | WHEELS_SMART | VIN_SMART
 
 def dynamic_buttons(node_key: str, ctx: Dict[str, Any]):
     if node_key == "t_smart_width":
@@ -147,7 +154,23 @@ def dynamic_buttons(node_key: str, ctx: Dict[str, Any]):
     if node_key == "t_smart_diameter":
         w = str(ctx.get("width") or "")
         h = str(ctx.get("height") or "")
-        return [f"R{d}" for d in smart_diameters(w, h)]  # красиво с "R"
+        return [f"R{d}" for d in smart_diameters(w, h)] # красиво с "R"
+    # ▼▼▼ НОВОЕ: VIN размеры
+    if node_key == "t_vin_sizes":
+        return ctx.get("size_options") or []
+    # ---- ДИСКИ (умный подбор) ----
+    if node_key == "w_smart_r":
+        return [f"R{r}" for r in smart_wheel_r(ctx)]
+    if node_key == "w_smart_j":
+        return smart_wheel_j(ctx)
+    if node_key == "w_smart_pcd":
+        return smart_wheel_pcd(ctx)
+    if node_key == "w_smart_et":
+        return smart_wheel_et(ctx)
+    if node_key == "w_smart_dia":
+        return smart_wheel_dia(ctx)
+    if node_key == "w_vin_params":
+        return ctx.get("wheel_options") or []
     return None
 def goto(chat_id: int, node_key: str) -> None:
     """Переход в узел (с записью истории) + авто-action."""
@@ -184,6 +207,9 @@ ACTIONS = {
 
     # Алиас, если в FLOW вдруг стоит 'render_offers'
     "render_offers": render_tire_offers,
+
+    "tires_sizes_from_vin": tires_sizes_from_vin,
+    "wheels_params_from_vin": wheels_params_from_vin,
 }
 
 def run_action(name: str, chat_id: int, ctx: Dict[str, Any]) -> None:
@@ -229,6 +255,13 @@ SAVE_BUTTON_TO = {
     "w_ask_car_model_Toyota": "car_model",
     "w_ask_car_model_VW": "car_model",
     "w_ask_car_model_BMW": "car_model",
+
+    # умный подбор дисков
+    "w_smart_r": "wheel_r",
+    "w_smart_j": "wheel_j",
+    "w_smart_pcd": "wheel_pcd",
+    "w_smart_et": "wheel_et",
+    "w_smart_dia": "wheel_dia",
 }
 
 
@@ -378,9 +411,18 @@ def on_button(call):
 
     try:
         idx = int(idx_str)
-        choice = buttons[idx]
+        raw = buttons[idx]
+        choice = str(raw)
+
+        # VIN выбор размера
+        if node_key == "t_vin_sizes":
+            u["ctx"]["size_raw"] = choice
+            goto(chat_id, "t_ask_season")   # ← без node_key=
+            bot.answer_callback_query(call.id)
+            return
+
     except Exception:
-        bot.answer_callback_query(call.id, "Ошибка выбора")
+        bot.answer_callback_query(call.id, text="Ошибка выбора")
         return
 
     # сохранить выбор (если маппинг есть)
@@ -400,7 +442,7 @@ def on_button(call):
     nxt = next_by.get(choice)
 
     # умный подбор — вручную двигаем
-    if not nxt and node_key in SMART_NODES:
+    if not nxt and node_key in TIRES_SMART:
         if node_key == "t_smart_width":
             u["ctx"]["width"] = choice
             goto(chat_id, "t_smart_height")
@@ -415,7 +457,46 @@ def on_button(call):
             goto(chat_id, "t_ask_season")
         bot.answer_callback_query(call.id)
         return
-
+    # выбор комплекта по VIN (диски)
+    if node_key == "w_vin_params":
+        # пример лейбла: "R17 · 7.5J · 5x120 · ET34 · DIA 72.6"
+        parts = choice.replace("·", " ").split()
+        # Rxx, xxJ, pcd, ETxx, DIA, dia
+        try:
+            r   = parts[0][1:] if parts[0].startswith("R") else parts[0]
+            j   = parts[1][:-1] if parts[1].endswith("J") else parts[1]
+            pcd = parts[2]
+            et  = parts[3][2:] if parts[3].startswith("ET") else parts[3]
+            dia = parts[5] if parts[4].upper() == "DIA" else parts[4]
+            u["ctx"].update({
+                "wheel_r": r, "wheel_j": j, "wheel_pcd": pcd, "wheel_et": et, "wheel_dia": dia
+            })
+        except Exception:
+            pass
+        goto(chat_id, "w_ask_budget")
+        bot.answer_callback_query(call.id)
+        return
+    # ---- Умный подбор дисков ----
+    if node_key in {"w_smart_r","w_smart_j","w_smart_pcd","w_smart_et","w_smart_dia"}:
+        ch = choice
+        if node_key == "w_smart_r":
+            u["ctx"]["wheel_r"] = ch[1:] if ch.startswith("R") else ch
+            goto(chat_id, "w_smart_j")
+        elif node_key == "w_smart_j":
+            u["ctx"]["wheel_j"] = ch[:-1] if ch.endswith("J") else ch
+            goto(chat_id, "w_smart_pcd")
+        elif node_key == "w_smart_pcd":
+            u["ctx"]["wheel_pcd"] = ch
+            goto(chat_id, "w_smart_et")
+        elif node_key == "w_smart_et":
+            u["ctx"]["wheel_et"] = ch[2:] if ch.startswith("ET") else ch
+            goto(chat_id, "w_smart_dia")
+        elif node_key == "w_smart_dia":
+            u["ctx"]["wheel_dia"] = ch
+            # готовы к поиску: сразу на бюджет
+            goto(chat_id, "w_ask_budget")
+        bot.answer_callback_query(call.id)
+        return
     if nxt:
         goto(chat_id, nxt)
     else:
@@ -495,7 +576,10 @@ def on_text(message):
             var_name = node.get("var_name")
             if var_name:
                 u["ctx"][var_name] = text
-
+            if node_key == "t_vin":
+                # экшен заполнит ctx["size_options"] по введённому VIN
+                from bot.actions.vin import tires_sizes_from_vin
+                tires_sizes_from_vin(bot, chat_id, u["ctx"])
             nxt = node.get("next")
             if nxt:
                 goto(chat_id, nxt)

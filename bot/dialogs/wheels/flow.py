@@ -7,13 +7,31 @@ FLOW = {
     # Вход в ветку дисков
     "w_entry": {
         "text": TEXT_W["entry"],
-        "buttons": BUTTONS_W["entry"],
+        "buttons": [
+            "Знаю параметры",
+            "🧠 Умный подбор (по шагам)",   # ← ДОБАВИЛИ
+            "Подобрать по авто",
+            "🔑 По VIN",
+        ],
         "next_by_button": {
             "Знаю параметры": "w_ask_r",
+            "🧠 Умный подбор (по шагам)": "w_smart_r",  # ← ДОБАВИЛИ
             "Подобрать по авто": "w_ask_car_make",
+            "🔑 По VIN": "w_vin",
         },
     },
-
+    "w_vin": {
+        "text": "Введи VIN (17 символов, латиница/цифры, без I,O,Q):",
+        "expect": "text",
+        "validator": "is_vin",
+        "var_name": "vin",
+        "action": "wheels_params_from_vin",   # ← экшен заполнит ctx["wheel_options"]
+        "next": "w_vin_params",
+    },
+    "w_vin_params": {
+        "text": "Нашёл такие варианты параметров дисков. Выбери один:",
+        "buttons": [],          # динамика из ctx["wheel_options"]
+        # дальше пойдём руками в on_button → на w_ask_budget
     # Знаю параметры → по очереди спрашиваем поля
     "w_ask_r": {
         "text": TEXT_W["ask_r"],
@@ -103,6 +121,32 @@ FLOW = {
         "action": "find_oem_wheels",
         "next": "w_ask_budget",
     },
+    # ── Умный подбор дисков ──
+    "w_smart_r": {
+        "text": "Выбери диаметр (R):",
+        "buttons": [],  # динамически
+        "next_by_button": {},
+    },
+    "w_smart_j": {
+        "text": "Выбери ширину обода (J):",
+        "buttons": [],
+        "next_by_button": {},
+    },
+    "w_smart_pcd": {
+        "text": "Выбери PCD:",
+        "buttons": [],
+        "next_by_button": {},
+    },
+    "w_smart_et": {
+        "text": "Выбери вылет (ET):",
+        "buttons": [],
+        "next_by_button": {},
+    },
+    "w_smart_dia": {
+        "text": "Выбери DIA (ЦО):",
+        "buttons": [],
+        "next_by_button": {},
+    },
 
     # Бюджет и бренды → поиск/вывод
     "w_ask_budget": {
@@ -125,4 +169,4 @@ FLOW = {
         "action": "render_wheels_offers",
         "next": "end",   # общий финал из базового FLOW
     },
-}
+}}
