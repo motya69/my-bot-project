@@ -33,6 +33,7 @@ FLOW = {
         "buttons": [],          # динамика из ctx["wheel_options"]
         # дальше пойдём руками в on_button → на w_ask_budget
     # Знаю параметры → по очереди спрашиваем поля
+    },
     "w_ask_r": {
         "text": TEXT_W["ask_r"],
         "expect": "text",
@@ -169,4 +170,4 @@ FLOW = {
         "action": "render_wheels_offers",
         "next": "end",   # общий финал из базового FLOW
     },
-}}
+}
