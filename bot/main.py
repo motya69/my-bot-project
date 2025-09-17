@@ -69,29 +69,123 @@ def get_user(chat_id: int) -> Dict[str, Any]:
         STATE[chat_id] = {"node": "start", "ctx": {}, "history": []}
     return STATE[chat_id]
 
+UI_MODE = "single"    # поменяй на "ephemeral", чтобы увидеть второй вариант
+def _safe_edit_text(chat_id: int, msg_id: int, text: str, reply_markup=None) -> bool:
+    """
+    Пытаемся обновить и текст, и разметку. Возвращаем True, если получилось.
+    Если возникает 'message is not modified', пробуем обновить только разметку.
+    """
+    try:
+        bot.edit_message_text(
+            text,
+            chat_id,
+            msg_id,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=reply_markup
+        )
+        return True
+    except Exception as e:
+        # Частый кейс: "Bad Request: message is not modified"
+        msg = str(e).lower()
+        if "message is not modified" in msg:
+            try:
+                bot.edit_message_reply_markup(chat_id, msg_id, reply_markup=reply_markup)
+                return True
+            except Exception:
+                return False
+        return False
+
+def send_or_edit(chat_id: int, text: str, reply_markup=None) -> None:
+    """
+    Если «экран» уже существует — редактируем его.
+    Если нет или редактирование не удалось — отправляем новое сообщение и запоминаем ID.
+    """
+    screen_id = _get_screen_msg_id(chat_id)
+    if screen_id:
+        ok = _safe_edit_text(chat_id, screen_id, text, reply_markup=reply_markup)
+        if ok:
+            return
+        else:
+            # если не получилось отредактировать (удалено/устарело/другие причины) — шлём новое
+            try:
+                m = bot.send_message(
+                    chat_id,
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                )
+                _set_screen_msg_id(chat_id, m.message_id)
+            except Exception:
+                # как совсем резерв: ничего не делаем, чтобы не заспамить
+                pass
+    else:
+        # экрана ещё нет — создаём
+        m = bot.send_message(
+            chat_id,
+            text,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+        _set_screen_msg_id(chat_id, m.message_id)
+def _get_screen_msg_id(chat_id: int) -> int | None:
+    return get_user(chat_id).get("screen_msg_id")
+
+def _set_screen_msg_id(chat_id: int, msg_id: int | None) -> None:
+    get_user(chat_id)["screen_msg_id"] = msg_id
+
+def _remember_bot_msg(chat_id: int, msg_id: int) -> None:
+    u = get_user(chat_id)
+    lst = u.setdefault("bot_msgs", [])
+    lst.append(msg_id)
+
+def _flush_bot_msgs(chat_id: int) -> None:
+    u = get_user(chat_id)
+    lst = u.get("bot_msgs") or []
+    for mid in lst:
+        try:
+            bot.delete_message(chat_id, mid)
+        except Exception:
+            pass
+    u["bot_msgs"] = []
+def send_ephemeral(chat_id: int, text: str, reply_markup=None) -> None:
+    """Вариант B: удаляем все прошлые бот-сообщения и шлём новое."""
+    _flush_bot_msgs(chat_id)
+    m = bot.send_message(
+        chat_id,
+        text,
+        reply_markup=reply_markup,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+    _remember_bot_msg(chat_id, m.message_id)
+    # для совместимости, тоже запомним как «экран»
+    _set_screen_msg_id(chat_id, m.message_id)
+
+
+
 def reset_user(chat_id: int) -> None:
     STATE[chat_id] = {"node": "start", "ctx": {}, "history": []}
 
 ERROR_HINT = "⚠️ Кажется, что-то не так с ответом. Проверь данные и попробуй ещё раз."
 RETRY_HINT = "⚠️ Кажется, что-то не так с ответом. Проверь данные и попробуй ещё раз."
 
-def go_back(chat_id: int, reason: str = ERROR_HINT) -> None:
-    """Откат на предыдущий узел с сообщением об ошибке."""
+def repeat_node(chat_id: int, reason: str = "Попробуйте ещё раз.") -> None:
+    u = get_user(chat_id)
+    node_key = u.get("node", "start")
+    send_node(chat_id, node_key, notice=reason)
+
+def go_back(chat_id: int, reason: str = "Возвращаю на предыдущий шаг.") -> None:
     u = get_user(chat_id)
     hist = u.get("history") or []
-    bot.send_message(chat_id, reason)
     if hist:
         prev = hist.pop()
         u["node"] = prev
-        send_node(chat_id, prev)
+        send_node(chat_id, prev, notice=reason)
     else:
-        send_node(chat_id, u.get("node", "start"))
-
-def repeat_node(chat_id: int, reason: str = RETRY_HINT) -> None:
-    """Показывает сообщение об ошибке и ПОВТОРЯЕТ текущий узел (без отката)."""
-    u = get_user(chat_id)
-    bot.send_message(chat_id, reason)
-    send_node(chat_id, u.get("node", "start"))
+        send_node(chat_id, u.get("node", "start"), notice=reason)
 
 # ---------- INLINE UI ----------
 def _cb_btn(node_key: str, idx: int) -> str:
@@ -126,9 +220,9 @@ def build_inline_kb(node_key: str, buttons: list[str] | None, show_back: bool) -
         kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data=_cb_back()))
     return kb
 
-def send_node(chat_id: int, node_key: str) -> None:
+def send_node(chat_id: int, node_key: str, notice: str | None = None) -> None:
     node = FLOW[node_key]
-    text = node.get("text", "")
+    text = node.get("text", "") or ""
     buttons = node.get("buttons") or []
 
     # динамические списки для умного подбора
@@ -137,9 +231,20 @@ def send_node(chat_id: int, node_key: str) -> None:
         if dyn is not None:
             buttons = dyn
 
+    # покажем предупреждение (ошибку/подсказку) прямо вверху «экрана»
+    if notice:
+        text = f"❗️ {notice}\n\n{text}"
+
     show_back = (node_key != "start")
     kb = build_inline_kb(node_key, buttons, show_back)
-    bot.send_message(chat_id, text, reply_markup=kb)
+
+    if UI_MODE == "single":
+        send_or_edit(chat_id, text, reply_markup=kb)
+    else:
+        send_ephemeral(chat_id, text, reply_markup=kb)
+
+
+
 VIN_SMART = {"t_vin_sizes", "w_vin_params"}
 TIRES_SMART  = {"t_smart_width", "t_smart_height", "t_smart_diameter"}
 WHEELS_SMART = {"w_smart_r", "w_smart_j", "w_smart_pcd", "w_smart_et", "w_smart_dia"}
@@ -335,7 +440,7 @@ def cmd_start(message):
         bot.send_message(message.chat.id, caption, parse_mode="HTML", reply_markup=start_kb)
 
     get_user(message.chat.id)["node"] = "start"
-
+    _set_screen_msg_id(message.chat.id, None)
 
 
 def cb_go_start(call):
